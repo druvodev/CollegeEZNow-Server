@@ -29,6 +29,7 @@ async function run() {
     await client.connect();
     const database = client.db("CollegeEZNow");
     const collegeCollection = database.collection("colleges");
+    const studentCollection = database.collection("students");
 
     app.get("/all", async (req, res) => {
       const result = await collegeCollection.find().toArray();
@@ -211,6 +212,55 @@ async function run() {
           error: "An error occurred while fetching research papers and data.",
         });
       }
+    });
+
+    // Route: Get student data by email
+    app.get("/students/:email", async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        const student = await studentCollection.findOne({ email });
+
+        if (!student) {
+          return res.status(404).json({ error: "Student not found." });
+        }
+
+        // Fetch the associated college data for the student from the college collection
+        const college = await collegeCollection.findOne({
+          collegeName: student.college,
+        });
+
+        // Combine the student and college data into a single object
+        const studentWithCollegeData = { ...student, logo: college?.logo };
+
+        res.json(studentWithCollegeData);
+      } catch (error) {
+        console.error("Error fetching student data:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching student data." });
+      }
+    });
+
+    // Add New Student
+    app.post("/updateUser", async (req, res) => {
+      const item = req.body;
+
+      // Check if the student with the given email already exists in the database
+      const existingStudent = await studentCollection.findOne({
+        email: item.email,
+      });
+
+      if (existingStudent) {
+        return res
+          .status(409)
+          .json({ error: "Student with this email already exists." });
+      }
+
+      // If the student doesn't exist, proceed with adding the new student
+      item.createdAt = new Date();
+      const result = await studentCollection.insertOne(item);
+      res.json(result);
     });
   } finally {
     // Ensures that the client will close when you finish/error
