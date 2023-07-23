@@ -41,7 +41,7 @@ async function run() {
         const aggregationPipeline = [
           {
             $project: {
-              _id: 0,
+              _id: 1,
               collegeName: 1,
               collegeImage: 1,
               admissionDate: 1,
@@ -262,7 +262,7 @@ async function run() {
             { $match: { _id: new ObjectId(collegeId) } },
             {
               $project: {
-                _id: 0,
+                _id: 1,
                 collegeName: 1,
                 collegeImage: 1,
                 admissionDate: 1,
@@ -288,6 +288,32 @@ async function run() {
       } catch (error) {
         console.error("Error fetching college data:", error);
         res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    // Route: Get details of a specific college based on collegeId
+    app.get("/colleges/:collegeId", async (req, res) => {
+      const collegeId = req.params.collegeId;
+
+      try {
+        // Convert the collegeId string to a valid ObjectId
+        const objectIdCollegeId = new ObjectId(collegeId);
+
+        // Search for the college using the _id field
+        const college = await collegeCollection.findOne({
+          _id: objectIdCollegeId,
+        });
+
+        if (!college) {
+          return res.status(404).json({ error: "College not found." });
+        }
+
+        res.json(college);
+      } catch (error) {
+        console.error("Error fetching college data:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching college data." });
       }
     });
 
