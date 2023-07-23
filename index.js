@@ -34,7 +34,7 @@ async function run() {
       const result = await collegeCollection.find().toArray();
       res.json(result);
     });
-    // Get all colleges with totalRatings as the sum of reviews' ratings and the average rating as 5
+    // Get all colleges with the average rating as 5
     app.get("/colleges", async (req, res) => {
       try {
         const aggregationPipeline = [
@@ -45,18 +45,12 @@ async function run() {
               collegeImage: 1,
               admissionDate: 1,
               researchCount: 1,
-              totalRatings: {
-                $sum: "$reviews.rating", // Calculate the sum of all reviews' ratings
-              },
-              totalReviews: {
-                $size: "$reviews", // Count the total number of reviews for each college
-              },
-            },
-          },
-          {
-            $addFields: {
               averageRating: {
-                $divide: ["$totalRatings", "$totalReviews"], // Calculate the average rating for each college
+                $cond: {
+                  if: { $eq: [{ $size: "$reviews" }, 0] }, // Check if totalReviews is 0 to avoid division by zero
+                  then: 0,
+                  else: { $avg: "$reviews.rating" }, // Calculate the average rating for each college
+                },
               },
             },
           },
@@ -143,9 +137,6 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while fetching top colleges." });
-      } finally {
-        // Close the database connection
-        await client.close();
       }
     });
 
@@ -161,6 +152,7 @@ async function run() {
             $group: {
               _id: "$_id",
               collegeName: { $first: "$collegeName" },
+              logo: { $first: "$logo" },
               collegeRating: { $avg: "$reviews.rating" }, // Calculate the average rating for each college
               events: { $first: "$events" }, // Preserve the "events" field for each college
               reviews: { $push: "$reviews" }, // Preserve the "reviews" array for each college
@@ -169,6 +161,7 @@ async function run() {
           {
             $project: {
               collegeName: 1,
+              logo: 1,
               collegeRating: 1, // Include the collegeRating field (average of ratings)
               events: 1,
               reviews: 1,
@@ -186,6 +179,36 @@ async function run() {
         console.error("Error fetching reviews and data for colleges:", error);
         res.status(500).json({
           error: "An error occurred while fetching reviews and data.",
+        });
+      }
+    });
+
+    // Route: Get research papers and other data for each college
+    app.get("/researchPapers", async (req, res) => {
+      try {
+        // Perform aggregation to get research papers and other data for each college
+        const aggregationPipeline = [
+          {
+            $project: {
+              collegeName: 1,
+              researchPapers: 1,
+            },
+          },
+        ];
+
+        const collegesWithResearchPapers = await collegeCollection
+          .aggregate(aggregationPipeline)
+          .toArray();
+
+        // Send the response containing research papers and other data for each college
+        res.json(collegesWithResearchPapers);
+      } catch (error) {
+        console.error(
+          "Error fetching research papers and data for colleges:",
+          error
+        );
+        res.status(500).json({
+          error: "An error occurred while fetching research papers and data.",
         });
       }
     });
