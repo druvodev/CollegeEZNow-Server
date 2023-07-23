@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 // const jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -239,6 +239,55 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while fetching student data." });
+      }
+    });
+
+    // Route: Search colleges by name
+    app.get("/search", async (req, res) => {
+      const searchTerm = req.query.name;
+      const regex = new RegExp(searchTerm, "i"); // Case-insensitive search
+      const result = await collegeCollection
+        .find({ collegeName: regex })
+        .toArray();
+
+      res.json(result);
+    });
+
+    // Route: Search Result Modal by _id
+    app.get("/college/:collegeId", async (req, res) => {
+      const collegeId = req.params.collegeId;
+      try {
+        const college = await collegeCollection
+          .aggregate([
+            { $match: { _id: new ObjectId(collegeId) } },
+            {
+              $project: {
+                _id: 0,
+                collegeName: 1,
+                collegeImage: 1,
+                admissionDate: 1,
+                researchCount: 1,
+                averageRating: {
+                  $cond: {
+                    if: { $eq: [{ $size: "$reviews" }, 0] },
+                    then: 0,
+                    else: { $avg: "$reviews.rating" },
+                  },
+                },
+              },
+            },
+          ])
+          .toArray();
+
+        if (college.length === 0) {
+          // College not found
+          return res.status(404).json({ message: "College not found" });
+        }
+
+        res.json(college[0]); // Return the first matching college (assuming collegeId is unique)
+      } catch (error) {
+        console.error("Error fetching college data:", error);
+        res.status(500).json({ message: "Internal Server Error" });
       }
     });
 
