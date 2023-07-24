@@ -231,7 +231,11 @@ async function run() {
         });
 
         // Combine the student and college data into a single object
-        const studentWithCollegeData = { ...student, logo: college?.logo };
+        const studentWithCollegeData = {
+          ...student,
+          logo: college?.logo,
+          collegeId: college?._id,
+        };
 
         res.json(studentWithCollegeData);
       } catch (error) {
@@ -336,6 +340,53 @@ async function run() {
       item.createdAt = new Date();
       const result = await studentCollection.insertOne(item);
       res.json(result);
+    });
+
+    // Add a new API endpoint to receive feedback data
+    app.post("/feedback/:collegeId", async (req, res) => {
+      const collegeId = req.params.collegeId;
+      const { rating, comment, studentEmail, studentName } = req.body;
+
+      try {
+        // Convert the collegeId string to a valid ObjectId
+        const objectIdCollegeId = new ObjectId(collegeId);
+
+        // Check if the user with the provided email has already given feedback for the college
+        const existingFeedback = await collegeCollection.findOne({
+          _id: objectIdCollegeId,
+          "reviews.reviewerEmail": studentEmail,
+        });
+
+        if (existingFeedback) {
+          return res.status(409).json({ error: "Feedback already submitted." });
+        }
+
+        // Update the college document with the feedback data
+        const result = await collegeCollection.updateOne(
+          { _id: objectIdCollegeId },
+          {
+            $push: {
+              reviews: {
+                reviewerName: studentName, // You can get the reviewer name from the logged-in user if applicable
+                reviewerEmail: studentEmail, // Store the user's email in the feedback
+                rating: parseFloat(rating), // Convert the rating to a number
+                reviewText: comment,
+              },
+            },
+          }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ error: "College not found." });
+        }
+
+        res.json({ message: "Feedback added successfully." });
+      } catch (error) {
+        console.error("Error adding feedback:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while adding feedback." });
+      }
     });
   } finally {
     // Ensures that the client will close when you finish/error
